@@ -1,0 +1,39 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(find / -iname \"*Laravel_Invoicing_App_Claude_Code_Implementation_Guide*\" 2>/dev/null)",
+      "Read(//c//**)",
+      "Bash(powershell.exe -Command \"Get-Command pandoc\")",
+      "Bash(python -c ' *)",
+      "Bash(composer -V)",
+      "Bash(mysql --version)",
+      "Bash(php -r \"echo PHP_VERSION;\")",
+      "Bash(composer create-project *)",
+      "Bash(composer require *)",
+      "Bash(\"/c/xampp8.2/mysql/bin/mysql.exe\" -u root -e \"CREATE DATABASE IF NOT EXISTS invoicing_app CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci; SHOW DATABASES;\")",
+      "Bash(curl -s -o /dev/null -w \"DASHBOARD \\(unauth\\): %{http_code}\\\\n\" http://127.0.0.1:8123/dashboard)",
+      "Bash(powershell -Command \"Get-CimInstance Win32_Process -Filter \\\\\"CommandLine like '%serve%8123%'\\\\\" | Select-Object ProcessId,CommandLine\")",
+      "Bash(powershell -Command \"Stop-Process -Id 4080 -Force\")",
+      "Bash(grep -rl \"Attributes\\\\\\\\\\\\\\\\Scope\" vendor/laravel/framework/src/Illuminate/Database/)",
+      "Bash(\"/c/xampp8.2/mysql/bin/mysql.exe\" -u root -e \"CREATE DATABASE IF NOT EXISTS invoicing_app_test CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;\")",
+      "PowerShell(Get-CimInstance Win32_Process -Filter \"CommandLine like '%serve%8123%'\")",
+      "PowerShell(Stop-Process -Id 1104 -Force)",
+      "PowerShell(Get-CimInstance Win32_Process -Filter \"CommandLine like '%serve%8124%'\")",
+      "Bash(npx playwright *)",
+      "Bash(find 'C:\\\\Users\\\\USER' -iname *chromium* -maxdepth 4)",
+      "Bash(echo \"exit: $?\")",
+      "PowerShell(Get-CimInstance Win32_Process -Filter \"CommandLine like '%serve%8130%'\" | Select-Object ProcessId | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue })",
+      "PowerShell(Get-CimInstance Win32_Process -Filter \"CommandLine like '%serve%8130%'\")",
+      "Bash(composer install *)",
+      "Bash(grep -E '[0-9a-f]{8}$')",
+      "Bash(grep -iE \"^gd$|mbstring|dom$\")",
+      "Bash(grep -n \"private \\\\$\\\\|@param array{\" -A 30 vendor/square/square/src/Types/Order.php)",
+      "Bash(grep -n \"private \\\\$\\\\|@param array{\" -A 10 vendor/square/square/src/Types/Error.php)",
+      "Bash(NODE_PATH=\"$\\(pwd\\)/node_modules\" node \"C:\\\\Users\\\\USER\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\c--xampp8-2-htdocs-mike-invoicing-app\\\\cdd55eae-eb09-43e3-aba8-68b45b2d6278\\\\scratchpad\\\\verify_square_portal.js\")",
+      "Bash(NODE_PATH=__CMDSUB_OUTPUT__/node_modules node 'C:\\\\Users\\\\USER\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\c--xampp8-2-htdocs-mike-invoicing-app\\\\cdd55eae-eb09-43e3-aba8-68b45b2d6278\\\\scratchpad\\\\verify_portal_page.js' b3fc244cceff77cef3982c6d143de1c57bf228eb027d2314eab273555534dfbcd95f1ef7861fc7c9992300c5211ac432)",
+      "Bash(curl -s http://127.0.0.1:8150/portal/b3fc244cceff77cef3982c6d143de1c57bf228eb027d2314eab273555534dfbcd95f1ef7861fc7c9992300c5211ac432 -o /tmp/portal_paid.html)",
+      "PowerShell(Get-CimInstance Win32_Process -Filter \"CommandLine like '%serve%8150%'\")",
+      "PowerShell(Stop-Process -Id 1772 -Force)"
+    ]
+  }
+}
