@@ -74,6 +74,17 @@ class Invoice extends Model
         return $this->belongsTo(RecurringInvoiceProfile::class);
     }
 
+    /**
+     * Recurring profiles that use this invoice as their template. Blocks
+     * deletion (see InvoicePolicy::delete()) since source_invoice_id is a
+     * restrictOnDelete foreign key and a soft-deleted source would silently
+     * break future recurring generation.
+     */
+    public function recurringProfilesAsSource(): HasMany
+    {
+        return $this->hasMany(RecurringInvoiceProfile::class, 'source_invoice_id');
+    }
+
     public function items(): HasMany
     {
         return $this->hasMany(InvoiceItem::class);

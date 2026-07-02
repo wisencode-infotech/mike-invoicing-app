@@ -14,8 +14,14 @@ class ProductService
      */
     protected const REQUIRED_COLUMNS = ['name', 'unit_price'];
 
-    public function paginateForUser(User $user, ?string $search, ?string $status, int $perPage = 15): LengthAwarePaginator
+    /**
+     * @param  array{search?: ?string, status?: ?string}  $filters
+     */
+    public function paginateForUser(User $user, array $filters = [], int $perPage = 15): LengthAwarePaginator
     {
+        $search = $filters['search'] ?? null;
+        $status = $filters['status'] ?? null;
+
         return $user->products()
             ->when($search, fn ($query) => $query->where('name', 'like', "%{$search}%"))
             ->when($status === 'active', fn ($query) => $query->active())

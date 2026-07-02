@@ -28,6 +28,7 @@ class UpdateCompanySettingsRequest extends FormRequest
             'receipt_footer' => ['nullable', 'string', 'max:2000'],
             'portal_first_access_notify' => ['nullable', 'boolean'],
             'payment_click_notify' => ['nullable', 'boolean'],
+            'payment_completed_notify' => ['nullable', 'boolean'],
         ];
     }
 
@@ -58,6 +59,7 @@ class UpdateCompanySettingsRequest extends FormRequest
             ]),
             'portal_first_access_notify' => $this->boolean('portal_first_access_notify'),
             'payment_click_notify' => $this->boolean('payment_click_notify'),
+            'payment_completed_notify' => $this->boolean('payment_completed_notify'),
         ];
     }
 }

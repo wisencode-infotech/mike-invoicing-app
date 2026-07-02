@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Exceptions\SquarePaymentException;
+use App\Http\Requests\SendInvoiceRequest;
 use App\Http\Requests\StoreInvoiceRequest;
 use App\Http\Requests\UpdateInvoiceNotesRequest;
 use App\Http\Requests\UpdateInvoiceRequest;
@@ -22,14 +23,18 @@ class InvoiceController extends Controller
 
     public function index(Request $request): View
     {
+        $filters = [
+            'search' => $request->string('search')->trim()->value() ?: null,
+            'status' => $request->string('status')->value() ?: null,
+            'customer_id' => $request->integer('customer_id') ?: null,
+            'date_from' => $request->string('date_from')->value() ?: null,
+            'date_to' => $request->string('date_to')->value() ?: null,
+        ];
+
         return view('invoices.index', [
-            'invoices' => $this->invoices->paginateForUser(
-                $request->user(),
-                $request->string('search')->trim()->value() ?: null,
-                $request->string('status')->value() ?: null,
-            ),
-            'search' => $request->string('search')->value(),
-            'status' => $request->string('status')->value(),
+            'invoices' => $this->invoices->paginateForUser($request->user(), $filters),
+            'filters' => $filters,
+            'customers' => $request->user()->customers()->orderBy('name')->get(),
         ]);
     }
 
@@ -60,6 +65,7 @@ class InvoiceController extends Controller
                 'user.companySetting',
                 'receipts',
                 'paymentLinks' => fn ($query) => $query->latest('id'),
+                'messageDeliveries' => fn ($query) => $query->latest('id'),
             ]),
         ]);
     }
@@ -98,11 +104,9 @@ class InvoiceController extends Controller
         return redirect()->route('invoices.show', $invoice)->with('status', 'invoice-notes-updated');
     }
 
-    public function send(Invoice $invoice): RedirectResponse
+    public function send(SendInvoiceRequest $request, Invoice $invoice): RedirectResponse
     {
-        $this->authorize('send', $invoice);
-
-        $this->invoices->send($invoice);
+        $this->invoices->send($invoice, $request->channel(), $request->ccList());
 
         return redirect()->route('invoices.show', $invoice)->with('status', 'invoice-sent');
     }

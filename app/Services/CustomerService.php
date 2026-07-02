@@ -2,14 +2,24 @@
 
 namespace App\Services;
 
+use App\Enums\EventType;
 use App\Models\Customer;
 use App\Models\User;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
+use Illuminate\Support\Facades\DB;
 
 class CustomerService
 {
-    public function paginateForUser(User $user, ?string $search, ?string $status, int $perPage = 15): LengthAwarePaginator
+    public function __construct(protected EventLogService $eventLog) {}
+
+    /**
+     * @param  array{search?: ?string, status?: ?string}  $filters
+     */
+    public function paginateForUser(User $user, array $filters = [], int $perPage = 15): LengthAwarePaginator
     {
+        $search = $filters['search'] ?? null;
+        $status = $filters['status'] ?? null;
+
         return $user->customers()
             ->when($search, fn ($query) => $query->where(function ($inner) use ($search) {
                 $inner->where('name', 'like', "%{$search}%")
@@ -27,7 +37,18 @@ class CustomerService
      */
     public function create(User $user, array $data): Customer
     {
-        return $user->customers()->create($data);
+        return DB::transaction(function () use ($user, $data) {
+            $customer = $user->customers()->create($data);
+
+            $this->eventLog->log(
+                user: $user,
+                type: EventType::CustomerCreated,
+                title: "Customer {$customer->name} created",
+                customer: $customer,
+            );
+
+            return $customer;
+        });
     }
 
     /**

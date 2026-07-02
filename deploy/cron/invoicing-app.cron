@@ -1,0 +1,21 @@
+# Crontab entries for the Invoicing App.
+#
+# Install (runs as www-data, the same user that owns the app files):
+#   sudo cp deploy/cron/invoicing-app.cron /etc/cron.d/invoicing-app
+#   sudo chmod 644 /etc/cron.d/invoicing-app
+#
+# /etc/cron.d files need an explicit user column (unlike a personal
+# crontab) and a trailing newline, both already present below.
+
+# Laravel's scheduler. One line drives everything — it decides on its own
+# each minute what's actually due (invoices:process-recurring every 5
+# minutes, invoices:mark-overdue daily — see routes/console.php). This
+# line never needs to change even if more scheduled commands are added
+# later.
+* * * * * www-data cd /var/www/invoicing-app && php artisan schedule:run >> /dev/null 2>&1
+
+# Nightly database + storage backup at 2:15am server time — see
+# deploy/scripts/backup.sh and docs/DEPLOYMENT.md "Backups". Picking a
+# specific off-peak minute (rather than a round number like 2:00) avoids
+# piling onto whatever else on the box is scheduled exactly on the hour.
+15 2 * * * www-data /var/www/invoicing-app/deploy/scripts/backup.sh >> /var/www/invoicing-app/storage/logs/backup.log 2>&1

@@ -125,6 +125,11 @@
                         <input type="checkbox" name="payment_click_notify" value="1" class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500" @checked(old('payment_click_notify', $settings->payment_click_notify))>
                         {{ __('Notify me the first time a customer clicks Pay') }}
                     </label>
+
+                    <label class="flex items-center gap-2 text-sm text-gray-700">
+                        <input type="checkbox" name="payment_completed_notify" value="1" class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500" @checked(old('payment_completed_notify', $settings->payment_completed_notify))>
+                        {{ __('Notify me when a payment is completed') }}
+                    </label>
                 </section>
 
                 <div class="flex items-center gap-4 border-t border-gray-100 pt-6">

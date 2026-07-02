@@ -19,6 +19,7 @@ use Illuminate\Support\Facades\Storage;
     'receipt_footer',
     'portal_first_access_notify',
     'payment_click_notify',
+    'payment_completed_notify',
 ])]
 class CompanySetting extends Model
 {
@@ -27,6 +28,7 @@ class CompanySetting extends Model
         return [
             'portal_first_access_notify' => 'boolean',
             'payment_click_notify' => 'boolean',
+            'payment_completed_notify' => 'boolean',
         ];
     }
 

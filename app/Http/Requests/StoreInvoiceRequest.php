@@ -2,11 +2,14 @@
 
 namespace App\Http\Requests;
 
+use App\Http\Requests\Concerns\ValidatesInvoiceItems;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
 class StoreInvoiceRequest extends FormRequest
 {
+    use ValidatesInvoiceItems;
+
     public function authorize(): bool
     {
         return true;
@@ -29,32 +32,7 @@ class StoreInvoiceRequest extends FormRequest
             'terms' => ['nullable', 'string', 'max:2000'],
 
             'items' => ['required', 'array', 'min:1'],
-            'items.*.product_id' => [
-                'nullable',
-                'integer',
-                Rule::exists('products', 'id')->where('user_id', $this->user()->id),
-            ],
-            'items.*.name' => ['required', 'string', 'max:255'],
-            'items.*.description' => ['nullable', 'string', 'max:2000'],
-            'items.*.quantity' => ['required', 'numeric', 'min:0.01'],
-            'items.*.unit_price' => ['required', 'numeric', 'min:0'],
-            'items.*.tax_rate' => ['nullable', 'numeric', 'min:0', 'max:100'],
+            ...$this->invoiceItemRules('items.*.'),
         ];
-    }
-
-    /**
-     * @return array<string, mixed>
-     */
-    public function invoiceData(): array
-    {
-        return $this->safe()->only(['customer_id', 'issue_date', 'due_date', 'notes', 'terms']);
-    }
-
-    /**
-     * @return array<int, array<string, mixed>>
-     */
-    public function itemsData(): array
-    {
-        return $this->safe()->only(['items'])['items'] ?? [];
     }
 }

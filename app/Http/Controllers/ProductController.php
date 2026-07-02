@@ -17,11 +17,10 @@ class ProductController extends Controller
     public function index(Request $request): View
     {
         return view('products.index', [
-            'products' => $this->products->paginateForUser(
-                $request->user(),
-                $request->string('search')->trim()->value() ?: null,
-                $request->string('status')->value() ?: null,
-            ),
+            'products' => $this->products->paginateForUser($request->user(), [
+                'search' => $request->string('search')->trim()->value() ?: null,
+                'status' => $request->string('status')->value() ?: null,
+            ]),
             'search' => $request->string('search')->value(),
             'status' => $request->string('status')->value(),
         ]);

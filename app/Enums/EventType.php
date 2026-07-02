@@ -9,6 +9,7 @@ namespace App\Enums;
  */
 enum EventType: string
 {
+    case CustomerCreated = 'customer_created';
     case InvoiceCreated = 'invoice_created';
     case InvoiceSent = 'invoice_sent';
     case InvoiceViewed = 'invoice_viewed';
@@ -21,8 +22,25 @@ enum EventType: string
     case PaymentFailed = 'payment_failed';
     case ReceiptGenerated = 'receipt_generated';
     case ReceiptSent = 'receipt_sent';
+    case RecurringProfileCreated = 'recurring_profile_created';
     case RecurringInvoiceGenerated = 'recurring_invoice_generated';
-    case DeliveryFailed = 'delivery_failed';
+    case EmailDeliveryFailed = 'email_failed';
+    case SmsDeliveryFailed = 'sms_failed';
     case ApiTokenCreated = 'api_token_created';
     case ApiTokenRevoked = 'api_token_revoked';
+
+    /**
+     * Single source of truth for activity-timeline styling (dashboard
+     * "Recent Activity" panel, invoice "Activity" timeline) — a status
+     * category, not a raw color, so the view picks the actual swatch.
+     */
+    public function color(): string
+    {
+        return match ($this) {
+            self::PaymentCompleted, self::ReceiptSent => 'good',
+            self::InvoiceOverdue, self::PaymentFailed, self::EmailDeliveryFailed, self::SmsDeliveryFailed, self::InvoiceCancelled => 'critical',
+            self::InvoiceSent, self::InvoiceViewed, self::PortalAccessed, self::PaymentLinkClicked, self::RecurringInvoiceGenerated => 'info',
+            default => 'neutral',
+        };
+    }
 }

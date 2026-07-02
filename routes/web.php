@@ -1,7 +1,10 @@
 <?php
 
+use App\Http\Controllers\ApiTokenController;
 use App\Http\Controllers\CompanySettingsController;
 use App\Http\Controllers\CustomerController;
+use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\HelpController;
 use App\Http\Controllers\InvoiceController;
 use App\Http\Controllers\InvoicePdfController;
 use App\Http\Controllers\Portal\PortalInvoiceController;
@@ -9,15 +12,15 @@ use App\Http\Controllers\Portal\PortalPaymentController;
 use App\Http\Controllers\ProductController;
 use App\Http\Controllers\ProductCsvImportController;
 use App\Http\Controllers\ProfileController;
+use App\Http\Controllers\RecurringInvoiceProfileController;
+use App\Http\Controllers\SquareWebhookController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', function () {
     return view('welcome');
 });
 
-Route::get('/dashboard', function () {
-    return view('dashboard');
-})->middleware(['auth', 'verified'])->name('dashboard');
+Route::get('/dashboard', [DashboardController::class, 'index'])->middleware(['auth', 'verified'])->name('dashboard');
 
 Route::middleware('auth')->group(function () {
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
@@ -40,14 +43,28 @@ Route::middleware('auth')->group(function () {
     Route::get('invoices/{invoice}/pdf', [InvoicePdfController::class, 'show'])->name('invoices.pdf');
     Route::get('invoices/{invoice}/receipt', [InvoicePdfController::class, 'receipt'])->name('invoices.receipt');
     Route::post('invoices/{invoice}/payment-link', [InvoiceController::class, 'createPaymentLink'])->name('invoices.payment-link.create');
+    Route::get('invoices/{invoice}/recurring/create', [RecurringInvoiceProfileController::class, 'create'])->name('invoices.recurring.create');
+    Route::post('invoices/{invoice}/recurring', [RecurringInvoiceProfileController::class, 'store'])->name('invoices.recurring.store');
+
+    Route::get('recurring-invoices', [RecurringInvoiceProfileController::class, 'index'])->name('recurring-invoices.index');
+    Route::patch('recurring-invoices/{recurringInvoiceProfile}/toggle', [RecurringInvoiceProfileController::class, 'toggleActive'])->name('recurring-invoices.toggle');
+
+    Route::get('api-tokens', [ApiTokenController::class, 'index'])->name('api-tokens.index');
+    Route::post('api-tokens', [ApiTokenController::class, 'store'])->name('api-tokens.store');
+    Route::patch('api-tokens/{apiToken}/revoke', [ApiTokenController::class, 'revoke'])->name('api-tokens.revoke');
+
+    Route::get('help', [HelpController::class, 'index'])->name('help');
 });
 
 // Public, token-secured customer portal — no auth, rate-limited to deter
-// token brute-forcing (see docs/ARCHITECTURE.md section 7). Full portal
-// instrumentation (access/click events, owner notifications) is Phase 9.
+// token brute-forcing (see docs/ARCHITECTURE.md section 7).
 Route::middleware('throttle:'.(int) config('portal.rate_limit_per_minute').',1')->group(function () {
     Route::get('portal/{paymentLink:token}', [PortalInvoiceController::class, 'show'])->name('portal.show');
     Route::get('portal/{paymentLink:token}/pay', [PortalPaymentController::class, 'redirect'])->name('portal.pay');
 });
+
+// Square webhook — no auth (Square isn't a logged-in user), signature-
+// verified inside the controller itself, CSRF-excluded (see bootstrap/app.php).
+Route::post('webhooks/square', SquareWebhookController::class)->name('webhooks.square');
 
 require __DIR__.'/auth.php';

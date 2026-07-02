@@ -4,9 +4,13 @@ namespace App\Models;
 
 use App\Enums\DeliveryChannel;
 use App\Enums\RecurringFrequency;
+use App\Policies\RecurringInvoiceProfilePolicy;
+use Database\Factories\RecurringInvoiceProfileFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Scope;
+use Illuminate\Database\Eloquent\Attributes\UsePolicy;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -27,8 +31,12 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
     'cc_emails',
     'active',
 ])]
+#[UsePolicy(RecurringInvoiceProfilePolicy::class)]
 class RecurringInvoiceProfile extends Model
 {
+    /** @use HasFactory<RecurringInvoiceProfileFactory> */
+    use HasFactory;
+
     protected function casts(): array
     {
         return [

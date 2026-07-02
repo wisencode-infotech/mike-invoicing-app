@@ -23,39 +23,67 @@
             </div>
         @endif
 
-        <form method="get" action="{{ route('invoices.index') }}" class="flex flex-wrap items-end gap-3 rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
-            <div class="min-w-[200px] flex-1">
+        @php
+            $hasActiveFilters = collect($filters)->filter()->isNotEmpty();
+        @endphp
+
+        <form method="get" action="{{ route('invoices.index') }}" class="grid grid-cols-1 gap-3 rounded-lg border border-gray-200 bg-white p-4 shadow-sm sm:grid-cols-2 lg:grid-cols-6 lg:items-end">
+            <div class="lg:col-span-2">
                 <x-input-label for="search" :value="__('Search')" />
-                <x-text-input id="search" name="search" type="text" class="mt-1 block w-full" value="{{ $search }}" placeholder="{{ __('Invoice number or customer') }}" />
+                <x-text-input id="search" name="search" type="text" class="mt-1 block w-full" value="{{ $filters['search'] }}" placeholder="{{ __('Invoice number or customer') }}" />
             </div>
 
             <div>
                 <x-input-label for="status" :value="__('Status')" />
-                <select id="status" name="status" class="mt-1 block rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+                <select id="status" name="status" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
                     <option value="">{{ __('All') }}</option>
                     @foreach (\App\Enums\InvoiceStatus::cases() as $case)
-                        <option value="{{ $case->value }}" @selected($status === $case->value)>{{ ucfirst($case->value) }}</option>
+                        <option value="{{ $case->value }}" @selected($filters['status'] === $case->value)>{{ ucfirst($case->value) }}</option>
                     @endforeach
                 </select>
             </div>
 
-            <x-secondary-button type="submit">{{ __('Filter') }}</x-secondary-button>
+            <div>
+                <x-input-label for="customer_id" :value="__('Customer')" />
+                <select id="customer_id" name="customer_id" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+                    <option value="">{{ __('All') }}</option>
+                    @foreach ($customers as $customer)
+                        <option value="{{ $customer->id }}" @selected((int) $filters['customer_id'] === $customer->id)>{{ $customer->name }}</option>
+                    @endforeach
+                </select>
+            </div>
 
-            @if ($search || $status)
-                <a href="{{ route('invoices.index') }}" class="text-sm text-gray-500 hover:text-gray-700">{{ __('Clear') }}</a>
-            @endif
+            <div>
+                <x-input-label for="date_from" :value="__('From')" />
+                <x-text-input id="date_from" name="date_from" type="date" class="mt-1 block w-full" value="{{ $filters['date_from'] }}" />
+            </div>
+
+            <div>
+                <x-input-label for="date_to" :value="__('To')" />
+                <x-text-input id="date_to" name="date_to" type="date" class="mt-1 block w-full" value="{{ $filters['date_to'] }}" />
+            </div>
+
+            <div class="flex items-center gap-3 sm:col-span-2 lg:col-span-6">
+                <x-secondary-button type="submit">{{ __('Filter') }}</x-secondary-button>
+
+                @if ($hasActiveFilters)
+                    <a href="{{ route('invoices.index') }}" class="text-sm text-gray-500 hover:text-gray-700">{{ __('Clear') }}</a>
+                @endif
+            </div>
         </form>
 
         @if ($invoices->isEmpty())
             <x-empty-state
                 :title="__('No invoices yet')"
-                :description="__('Create your first invoice to start billing customers.')"
+                :description="$hasActiveFilters ? __('No invoices match these filters.') : __('Create your first invoice to start billing customers.')"
             >
-                <x-slot name="action">
-                    <a href="{{ route('invoices.create') }}">
-                        <x-primary-button>{{ __('New Invoice') }}</x-primary-button>
-                    </a>
-                </x-slot>
+                @unless ($hasActiveFilters)
+                    <x-slot name="action">
+                        <a href="{{ route('invoices.create') }}">
+                            <x-primary-button>{{ __('New Invoice') }}</x-primary-button>
+                        </a>
+                    </x-slot>
+                @endunless
             </x-empty-state>
         @else
             <x-table :headers="[__('Invoice #'), __('Customer'), __('Issue Date'), __('Due Date'), __('Total'), __('Status'), '']">

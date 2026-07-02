@@ -2,8 +2,12 @@
 
 namespace App\Services;
 
+use App\Enums\DeliveryChannel;
 use App\Enums\EventType;
 use App\Enums\InvoiceStatus;
+use App\Exceptions\SquarePaymentException;
+use App\Jobs\SendInvoiceEmailJob;
+use App\Jobs\SendInvoiceSmsJob;
 use App\Models\Invoice;
 use App\Models\User;
 use App\Support\Money;
@@ -18,15 +22,23 @@ class InvoiceService
         protected SquarePaymentService $squarePayments,
     ) {}
 
-    public function paginateForUser(User $user, ?string $search, ?string $status, int $perPage = 15): LengthAwarePaginator
+    /**
+     * @param  array{search?: ?string, status?: ?string, customer_id?: ?int, date_from?: ?string, date_to?: ?string}  $filters
+     */
+    public function paginateForUser(User $user, array $filters = [], int $perPage = 15): LengthAwarePaginator
     {
+        $search = $filters['search'] ?? null;
+
         return $user->invoices()
             ->with('customer')
             ->when($search, fn ($query) => $query->where(function ($inner) use ($search) {
                 $inner->where('invoice_number', 'like', "%{$search}%")
                     ->orWhereHas('customer', fn ($c) => $c->where('name', 'like', "%{$search}%"));
             }))
-            ->when($status, fn ($query) => $query->status(InvoiceStatus::from($status)))
+            ->when($filters['status'] ?? null, fn ($query, $status) => $query->status(InvoiceStatus::from($status)))
+            ->when($filters['customer_id'] ?? null, fn ($query, $customerId) => $query->where('customer_id', $customerId))
+            ->when($filters['date_from'] ?? null, fn ($query, $date) => $query->whereDate('issue_date', '>=', $date))
+            ->when($filters['date_to'] ?? null, fn ($query, $date) => $query->whereDate('issue_date', '<=', $date))
             ->orderByDesc('issue_date')
             ->orderByDesc('id')
             ->paginate($perPage)
@@ -88,6 +100,27 @@ class InvoiceService
     }
 
     /**
+     * Appends a single line item to an existing draft invoice (e.g. the
+     * API's POST .../items, which builds an invoice incrementally rather
+     * than replacing the whole item set like update() does) — caller must
+     * already have authorized this against Invoice::isEditable().
+     *
+     * @param  array<string, mixed>  $itemData
+     */
+    public function addItem(Invoice $invoice, array $itemData): Invoice
+    {
+        return DB::transaction(function () use ($invoice, $itemData) {
+            $nextSortOrder = $invoice->items()->max('sort_order');
+            $nextSortOrder = $nextSortOrder === null ? 0 : $nextSortOrder + 1;
+
+            $this->syncItems($invoice, [$itemData], $nextSortOrder);
+            $this->recalculateTotals($invoice);
+
+            return $invoice->fresh('items');
+        });
+    }
+
+    /**
      * The one field still editable after an invoice is sent/paid/cancelled.
      */
     public function updateNotes(Invoice $invoice, ?string $notes): Invoice
@@ -97,22 +130,49 @@ class InvoiceService
         return $invoice;
     }
 
-    public function send(Invoice $invoice): Invoice
+    /**
+     * Sends (or resends) an invoice by email and/or SMS. Callable whenever
+     * the invoice isn't paid/cancelled (see InvoicePolicy::send()) — the
+     * first call transitions draft -> sent; later calls just update
+     * sent_at and re-dispatch delivery.
+     *
+     * @param  array<int, string>  $cc  Email channel only.
+     */
+    public function send(Invoice $invoice, DeliveryChannel $channel, array $cc = []): Invoice
     {
+        $isFirstSend = $invoice->status === InvoiceStatus::Draft;
+
         $invoice->update([
-            'status' => InvoiceStatus::Sent,
+            'status' => $isFirstSend ? InvoiceStatus::Sent : $invoice->status,
             'sent_at' => now(),
         ]);
+
+        // Best-effort — sending must not be blocked by Square being
+        // unconfigured; the email/SMS still goes out, just without a pay
+        // link (see EmailService/SmsService, which also degrade gracefully).
+        try {
+            $this->squarePayments->createOrGetPaymentLink($invoice->load('items'));
+        } catch (SquarePaymentException) {
+            // Already logged safely inside SquarePaymentService.
+        }
 
         $this->eventLog->log(
             user: $invoice->user,
             type: EventType::InvoiceSent,
-            title: "Invoice {$invoice->invoice_number} marked as sent",
+            title: $isFirstSend ? "Invoice {$invoice->invoice_number} sent" : "Invoice {$invoice->invoice_number} resent",
             invoice: $invoice,
             customer: $invoice->customer,
         );
 
-        return $invoice;
+        if (in_array($channel, [DeliveryChannel::Email, DeliveryChannel::Both], true)) {
+            SendInvoiceEmailJob::dispatch($invoice, $cc);
+        }
+
+        if (in_array($channel, [DeliveryChannel::Sms, DeliveryChannel::Both], true)) {
+            SendInvoiceSmsJob::dispatch($invoice);
+        }
+
+        return $invoice->fresh();
     }
 
     public function cancel(Invoice $invoice): Invoice
@@ -145,9 +205,59 @@ class InvoiceService
     }
 
     /**
+     * Sweeps every sent/viewed invoice past its due_date to `overdue`
+     * (see Invoice::pastDue()) — "overdue" is never reached by a direct
+     * user action, only this scheduled sweep (see MarkOverdueInvoicesJob).
+     * Still not terminal: an overdue invoice can go on to be paid or
+     * cancelled normally.
+     */
+    public function markOverdueInvoices(): int
+    {
+        $invoices = Invoice::pastDue()->with('user', 'customer')->get();
+
+        foreach ($invoices as $invoice) {
+            DB::transaction(function () use ($invoice) {
+                $invoice->update(['status' => InvoiceStatus::Overdue]);
+
+                $this->eventLog->log(
+                    user: $invoice->user,
+                    type: EventType::InvoiceOverdue,
+                    title: "Invoice {$invoice->invoice_number} is now overdue",
+                    invoice: $invoice,
+                    customer: $invoice->customer,
+                );
+            });
+        }
+
+        return $invoices->count();
+    }
+
+    /**
+     * Called on portal access (see PortalAccessService). Idempotent — a
+     * second call is a no-op since viewed_at is only ever set once and the
+     * status transition only ever applies from "sent".
+     */
+    public function markViewed(Invoice $invoice): void
+    {
+        $updates = [];
+
+        if ($invoice->viewed_at === null) {
+            $updates['viewed_at'] = now();
+        }
+
+        if ($invoice->status === InvoiceStatus::Sent) {
+            $updates['status'] = InvoiceStatus::Viewed;
+        }
+
+        if ($updates !== []) {
+            $invoice->update($updates);
+        }
+    }
+
+    /**
      * @param  array<int, array<string, mixed>>  $itemsData
      */
-    protected function syncItems(Invoice $invoice, array $itemsData): void
+    protected function syncItems(Invoice $invoice, array $itemsData, int $startSortOrder = 0): void
     {
         foreach (array_values($itemsData) as $index => $itemData) {
             $quantity = $itemData['quantity'];
@@ -167,7 +277,7 @@ class InvoiceService
                 'subtotal' => $subtotal,
                 'tax_total' => $tax,
                 'total' => Money::add($subtotal, $tax),
-                'sort_order' => $index,
+                'sort_order' => $startSortOrder + $index,
             ]);
         }
     }

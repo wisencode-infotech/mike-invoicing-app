@@ -17,11 +17,10 @@ class CustomerController extends Controller
     public function index(Request $request): View
     {
         return view('customers.index', [
-            'customers' => $this->customers->paginateForUser(
-                $request->user(),
-                $request->string('search')->trim()->value() ?: null,
-                $request->string('status')->value() ?: null,
-            ),
+            'customers' => $this->customers->paginateForUser($request->user(), [
+                'search' => $request->string('search')->trim()->value() ?: null,
+                'status' => $request->string('status')->value() ?: null,
+            ]),
             'search' => $request->string('search')->value(),
             'status' => $request->string('status')->value(),
         ]);

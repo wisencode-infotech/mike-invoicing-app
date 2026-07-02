@@ -4,12 +4,11 @@ namespace App\Services;
 
 use App\Enums\EventType;
 use App\Enums\PaymentStatus;
-use App\Mail\ReceiptMail;
+use App\Jobs\SendReceiptEmailJob;
 use App\Models\Payment;
 use App\Models\Receipt;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Storage;
 use InvalidArgumentException;
 
@@ -63,32 +62,13 @@ class ReceiptService
     }
 
     /**
-     * Sends the receipt PDF to the customer on file. Sent synchronously for
-     * now — Phase 10 wraps this in a queued job with message_deliveries
-     * tracking; this method is what that job will call.
+     * Queues the receipt PDF email. EmailService::sendReceipt() (called by
+     * SendReceiptEmailJob) owns the actual send, message_deliveries
+     * tracking, and ReceiptSent event logging.
      */
     public function emailToCustomer(Receipt $receipt): void
     {
-        $receipt->loadMissing('invoice.customer', 'invoice.user', 'payment');
-        $customerEmail = $receipt->invoice->customer->email;
-
-        if (! $customerEmail) {
-            return;
-        }
-
-        $mail = new ReceiptMail($receipt, $this->pdf->paymentMethodLabel($receipt->payment));
-
-        Mail::to($customerEmail)->send($mail);
-
-        $receipt->update(['sent_at' => now()]);
-
-        $this->eventLog->log(
-            user: $receipt->invoice->user,
-            type: EventType::ReceiptSent,
-            title: "Receipt {$receipt->receipt_number} emailed to customer",
-            invoice: $receipt->invoice,
-            customer: $receipt->invoice->customer,
-        );
+        SendReceiptEmailJob::dispatch($receipt);
     }
 
     protected function nextReceiptNumber(User $user): string

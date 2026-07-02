@@ -9,6 +9,7 @@ use App\Models\Invoice;
 use App\Models\Product;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Queue;
 use Tests\TestCase;
 
 class InvoiceTest extends TestCase
@@ -262,11 +263,12 @@ class InvoiceTest extends TestCase
 
     public function test_draft_invoice_can_be_sent(): void
     {
+        Queue::fake();
         $user = User::factory()->create();
         $customer = Customer::factory()->for($user)->create();
         $invoice = Invoice::factory()->for($user)->for($customer)->create();
 
-        $response = $this->actingAs($user)->post("/invoices/{$invoice->id}/send");
+        $response = $this->actingAs($user)->post("/invoices/{$invoice->id}/send", ['channel' => 'email']);
 
         $response->assertRedirect(route('invoices.show', $invoice));
         $invoice->refresh();
@@ -279,13 +281,35 @@ class InvoiceTest extends TestCase
         ]);
     }
 
-    public function test_already_sent_invoice_cannot_be_sent_again(): void
+    public function test_sent_invoice_can_be_resent(): void
     {
+        Queue::fake();
         $user = User::factory()->create();
         $customer = Customer::factory()->for($user)->create();
         $invoice = Invoice::factory()->sent()->for($user)->for($customer)->create();
+        $firstSentAt = $invoice->sent_at;
 
-        $response = $this->actingAs($user)->post("/invoices/{$invoice->id}/send");
+        $this->travel(1)->hours();
+        $response = $this->actingAs($user)->post("/invoices/{$invoice->id}/send", ['channel' => 'email']);
+
+        $response->assertRedirect(route('invoices.show', $invoice));
+        $invoice->refresh();
+        $this->assertSame(InvoiceStatus::Sent, $invoice->status);
+        $this->assertTrue($invoice->sent_at->gt($firstSentAt));
+
+        $this->assertDatabaseHas('event_logs', [
+            'invoice_id' => $invoice->id,
+            'title' => "Invoice {$invoice->invoice_number} resent",
+        ]);
+    }
+
+    public function test_paid_invoice_cannot_be_sent(): void
+    {
+        $user = User::factory()->create();
+        $customer = Customer::factory()->for($user)->create();
+        $invoice = Invoice::factory()->paid()->for($user)->for($customer)->create();
+
+        $response = $this->actingAs($user)->post("/invoices/{$invoice->id}/send", ['channel' => 'email']);
 
         $response->assertForbidden();
     }
@@ -398,5 +422,50 @@ class InvoiceTest extends TestCase
 
         $response->assertSee($sent->invoice_number);
         $response->assertDontSee($draft->invoice_number);
+    }
+
+    public function test_invoices_can_be_filtered_by_customer(): void
+    {
+        $user = User::factory()->create();
+        $mine = Customer::factory()->for($user)->create(['name' => 'Keep Me']);
+        $other = Customer::factory()->for($user)->create(['name' => 'Filter Me Out']);
+        $matching = Invoice::factory()->for($user)->for($mine)->create();
+        $excluded = Invoice::factory()->for($user)->for($other)->create();
+
+        $response = $this->actingAs($user)->get("/invoices?customer_id={$mine->id}");
+
+        $response->assertSee($matching->invoice_number);
+        $response->assertDontSee($excluded->invoice_number);
+    }
+
+    public function test_invoices_can_be_filtered_by_date_range(): void
+    {
+        $user = User::factory()->create();
+        $customer = Customer::factory()->for($user)->create();
+        $inRange = Invoice::factory()->for($user)->for($customer)->create(['issue_date' => '2026-06-15']);
+        $tooEarly = Invoice::factory()->for($user)->for($customer)->create(['issue_date' => '2026-05-01']);
+        $tooLate = Invoice::factory()->for($user)->for($customer)->create(['issue_date' => '2026-07-01']);
+
+        $response = $this->actingAs($user)->get('/invoices?date_from=2026-06-01&date_to=2026-06-30');
+
+        $response->assertSee($inRange->invoice_number);
+        $response->assertDontSee($tooEarly->invoice_number);
+        $response->assertDontSee($tooLate->invoice_number);
+    }
+
+    public function test_invoice_filters_can_be_combined(): void
+    {
+        $user = User::factory()->create();
+        $customer = Customer::factory()->for($user)->create();
+        $other = Customer::factory()->for($user)->create();
+        $matching = Invoice::factory()->sent()->for($user)->for($customer)->create(['issue_date' => '2026-06-15']);
+        $wrongCustomer = Invoice::factory()->sent()->for($user)->for($other)->create(['issue_date' => '2026-06-15']);
+        $wrongStatus = Invoice::factory()->for($user)->for($customer)->create(['issue_date' => '2026-06-15']);
+
+        $response = $this->actingAs($user)->get("/invoices?customer_id={$customer->id}&status=sent&date_from=2026-06-01&date_to=2026-06-30");
+
+        $response->assertSee($matching->invoice_number);
+        $response->assertDontSee($wrongCustomer->invoice_number);
+        $response->assertDontSee($wrongStatus->invoice_number);
     }
 }

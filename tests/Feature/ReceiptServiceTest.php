@@ -4,14 +4,14 @@ namespace Tests\Feature;
 
 use App\Enums\EventType;
 use App\Enums\PaymentStatus;
-use App\Mail\ReceiptMail;
+use App\Jobs\SendReceiptEmailJob;
 use App\Models\Customer;
 use App\Models\Invoice;
 use App\Models\Payment;
 use App\Models\User;
 use App\Services\ReceiptService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\Storage;
 use InvalidArgumentException;
 use Tests\TestCase;
@@ -93,10 +93,10 @@ class ReceiptServiceTest extends TestCase
         $this->assertDatabaseCount('receipts', 1);
     }
 
-    public function test_email_to_customer_sends_receipt_mail_with_pdf_attached(): void
+    public function test_email_to_customer_queues_the_receipt_email_job(): void
     {
         Storage::fake('local');
-        Mail::fake();
+        Queue::fake();
 
         $customer = Customer::factory()->for(User::factory())->create(['email' => 'jane@example.test']);
         $payment = $this->completedPayment($customer);
@@ -105,32 +105,6 @@ class ReceiptServiceTest extends TestCase
         $receipt = $service->generate($payment);
         $service->emailToCustomer($receipt);
 
-        Mail::assertSent(ReceiptMail::class, function (ReceiptMail $mail) use ($receipt) {
-            return $mail->receipt->id === $receipt->id
-                && $mail->hasTo('jane@example.test')
-                && count($mail->attachments()) === 1;
-        });
-
-        $this->assertNotNull($receipt->fresh()->sent_at);
-        $this->assertDatabaseHas('event_logs', [
-            'invoice_id' => $receipt->invoice_id,
-            'event_type' => EventType::ReceiptSent->value,
-        ]);
-    }
-
-    public function test_email_to_customer_does_nothing_when_customer_has_no_email(): void
-    {
-        Storage::fake('local');
-        Mail::fake();
-
-        $customer = Customer::factory()->for(User::factory())->create(['email' => null]);
-        $payment = $this->completedPayment($customer);
-        $service = app(ReceiptService::class);
-
-        $receipt = $service->generate($payment);
-        $service->emailToCustomer($receipt);
-
-        Mail::assertNothingSent();
-        $this->assertNull($receipt->fresh()->sent_at);
+        Queue::assertPushed(SendReceiptEmailJob::class, fn (SendReceiptEmailJob $job) => $job->receipt->id === $receipt->id);
     }
 }
